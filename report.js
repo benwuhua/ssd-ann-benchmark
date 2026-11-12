@@ -10,6 +10,11 @@ const datasetButtons = document.querySelectorAll('[data-set]');
 const metricButtons = document.querySelectorAll('[data-metric]');
 const all = document.querySelector('#all');
 const fmt = (value, digits) => value.toLocaleString('zh-CN', {minimumFractionDigits: digits, maximumFractionDigits: digits});
+const featured = benchmarks[0].rows.find(row => row.engine === 'LAANN' && row.mode === 'fixed');
+for (const item of document.querySelectorAll('[data-overview]')) {
+  const key = item.dataset.overview;
+  item.textContent = fmt(featured[key], metrics[key].digits);
+}
 
 function render() {
   const spec = metrics[metric];
@@ -23,9 +28,12 @@ function render() {
     '<div class="bar-track" aria-hidden="true"><i style="--v:' + (100 * row[metric] / max) + '%"></i></div>' +
     '<b class="bar-value">' + fmt(row[metric], spec.digits) + '</b></div>'
   ).join('') + '<div class="scale" aria-hidden="true"><span></span><div><span>0</span><span>' + fmt(max/2,0) + '</span><span>' + fmt(max,0) + '</span></div><span></span></div>';
-  document.querySelector('#chart-note').textContent = dataset.note;
-  document.querySelector('#table-caption').textContent = dataset.label + ' 完整结果';
-  document.querySelector('#table-body').innerHTML = dataset.rows.map(row =>
+  document.querySelector('#chart-note').textContent =
+    (all.checked ? '当前展示全部配置。' : '当前展示固定 W=2 的四组主对照。') + dataset.note +
+    ' 完整 CSV 包含全部数据集与配置，保留更多小数位。';
+  document.querySelector('#table-label').textContent = '查看当前结果表 · ' + rows.length + ' 条配置';
+  document.querySelector('#table-caption').textContent = dataset.label + ' 当前结果';
+  document.querySelector('#table-body').innerHTML = rows.map(row =>
     '<tr><th scope="row"><span class="table-engine ' + row.engine.toLowerCase() + '">' + row.engine +
     '</span><small>' + row.variant + (row.rounds === 1 ? ' · 单轮' : '') + '</small></th>' +
     '<td>' + fmt(row.recall,2) + '%</td><td>' + fmt(row.qps,0) + '</td><td>' + fmt(row.read,1) +

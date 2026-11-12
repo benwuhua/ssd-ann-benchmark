@@ -6,10 +6,10 @@
 <meta name="description" content="DiskANN、GoVector、DGAI、LAANN 的索引原理和 ARM64 实测。比较 DINO-100M、DINO-1M 与 SIFT1M 的召回率、吞吐、尾延迟和实际读盘量。">
 <meta name="theme-color" content="#101429">
 <title>SSD 向量检索 · 测试报告</title>
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=2">
 <link rel="icon" href="data:,">
-<script defer src="benchmark.js"></script>
-<script defer src="report.js"></script>
+<script defer src="benchmark.js?v=2"></script>
+<script defer src="report.js?v=2"></script>
 </head>
 <body>
 <a class="skip" href="#results">跳到测试结果</a>
@@ -17,7 +17,7 @@
   <div class="shell top-inner">
     <a class="brand" href="#top"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span> SSD 向量检索</a>
     <nav aria-label="报告目录"><a href="#results">实测结果</a><a href="#systems">方案原理</a><a href="#analysis">结果解读</a><a href="#method">测试口径</a></nav>
-    <a class="download" href="benchmark.csv" download>下载数据 <span aria-hidden="true">↓</span></a>
+    <a class="download" href="benchmark.csv" download>下载完整 CSV <span aria-hidden="true">↓</span></a>
   </div>
 </header>
 <main id="top">
@@ -32,11 +32,11 @@
       <div class="hero-visual" role="img" aria-label="NVMe 固态硬盘的概念配图"></div>
     </div>
     <div class="shell metric-strip">
-      <div><strong>1,216 <small>QPS</small></strong><span>LAANN 自适应吞吐</span></div>
-      <div><strong>210.8 <small>KiB</small></strong><span>LAANN 固定 W2 零热页读盘 / 查询</span></div>
-      <div><strong>4.54 <small>ms</small></strong><span>LAANN 自适应 P99</span></div>
+      <div><strong><data data-overview="qps">863</data> <small>QPS</small></strong><span>LAANN 吞吐</span></div>
+      <div><strong><data data-overview="read">210.8</data> <small>KiB</small></strong><span>LAANN 读盘 / 查询</span></div>
+      <div><strong><data data-overview="p99">5.74</data> <small>ms</small></strong><span>LAANN P99 时延</span></div>
     </div>
-    <p class="shell hero-foot">以上数值来自 DINO-100M。自适应配置使用 154.7 万个静态热页。</p>
+    <p class="shell hero-foot">以上三项均来自 DINO‑100M 的 LAANN 固定 W=2、零热页配置。</p>
   </section>
 
   <section id="results" class="shell section results">
@@ -49,7 +49,7 @@
           <button type="button" data-set="sift" aria-pressed="false">SIFT1M</button>
           <button type="button" data-set="1m" aria-pressed="false">DINO-1M</button>
         </div>
-        <label class="check"><input id="all" type="checkbox"> 显示缓存与自适应配置</label>
+        <label class="check"><input id="all" type="checkbox"> 图表和表格显示全部配置</label>
       </div>
       <p class="dataset-meta" id="dataset-meta">1 亿向量 · 1,024 维 · uint8 · 1,000 条查询</p>
       <div class="metric-options" role="group" aria-label="图表指标">
@@ -64,9 +64,9 @@
       </figure>
       <div class="chart-note" id="chart-note"></div>
       <details class="table-detail">
-        <summary>查看完整测试表 <span aria-hidden="true">↓</span></summary>
+        <summary><span id="table-label">查看当前结果表 · 4 条配置</span> <span aria-hidden="true">↓</span></summary>
         <div class="table-wrap" tabindex="0" role="region" aria-label="测试结果表，可水平滚动">
-          <table><caption id="table-caption" class="sr-only">DINO-100M 完整结果</caption><thead><tr><th scope="col">方案 / 配置</th><th scope="col">Recall@10</th><th scope="col">QPS</th><th scope="col">读盘<br><small>KiB / 查询</small></th><th scope="col">平均<br><small>ms</small></th><th scope="col">P99<br><small>ms</small></th><th scope="col">RSS<br><small>GiB</small></th></tr></thead><tbody id="table-body"></tbody></table>
+          <table><caption id="table-caption" class="sr-only">DINO-100M 当前结果</caption><thead><tr><th scope="col">方案 / 配置</th><th scope="col">Recall@10</th><th scope="col">QPS</th><th scope="col">读盘<br><small>KiB / 查询</small></th><th scope="col">平均<br><small>ms</small></th><th scope="col">P99<br><small>ms</small></th><th scope="col">RSS<br><small>GiB</small></th></tr></thead><tbody id="table-body"></tbody></table>
         </div>
       </details>
       <noscript>开启 JavaScript 查看交互图表，或直接下载 <a href="benchmark.csv">完整测试数据</a>。</noscript>

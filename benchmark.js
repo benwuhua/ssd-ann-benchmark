@@ -4,7 +4,7 @@ const benchmarks = [
     "label": "DINO-100M",
     "size": "1 亿向量 · 1,024 维 · uint8 · 1,000 条查询",
     "target": "约 85.6% Recall@10",
-    "note": "GoVector 使用单页动态缓存。DGAI 使用原生选页与分裂规则重放。LAANN 零热页仍保留导航图。",
+    "note": "GoVector 使用单页动态缓存。DGAI 使用原生选页与分裂规则重放。LAANN 零热页仍保留导航图。 展开全部配置后，LAANN 热页固定 W2 取 L=56，自适应取 L=54，召回分别为 85.72% 和 85.70%。",
     "rows": [
       {
         "engine": "DiskANN",

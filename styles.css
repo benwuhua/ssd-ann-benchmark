@@ -80,7 +80,7 @@ button:hover{background:#edf2f8}
 .chart-note{font-size:13px;color:var(--muted);padding:10px 0 15px}
 .table-detail{border-top:1px solid var(--rule)}
 summary{cursor:pointer;padding:14px 0;font-weight:700;font-size:14px}
-summary span{margin-left:6px;color:var(--laann)}
+summary span[aria-hidden]{margin-left:6px;color:var(--laann)}
 .table-wrap{overflow:auto;margin-bottom:19px}
 table{width:100%;border-collapse:collapse;white-space:nowrap;font-size:13px}
 th,td{padding:10px 9px;text-align:right;border-bottom:1px solid #e9ecf3}
