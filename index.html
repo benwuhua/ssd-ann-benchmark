@@ -49,7 +49,7 @@
           <button type="button" data-set="sift" aria-pressed="false">SIFT1M</button>
           <button type="button" data-set="1m" aria-pressed="false">DINO-1M</button>
         </div>
-        <label class="check"><input id="all" type="checkbox"> 图表和表格显示全部配置</label>
+        <label class="check"><input id="all" type="checkbox" checked> 图表和表格显示全部配置</label>
       </div>
       <p class="dataset-meta" id="dataset-meta">1 亿向量 · 1,024 维 · uint8 · 1,000 条查询</p>
       <div class="metric-options" role="group" aria-label="图表指标">
@@ -63,8 +63,8 @@
         <div id="chart-rows"></div>
       </figure>
       <div class="chart-note" id="chart-note"></div>
-      <details class="table-detail">
-        <summary><span id="table-label">查看当前结果表 · 4 条配置</span> <span aria-hidden="true">↓</span></summary>
+      <details class="table-detail" open>
+        <summary><span id="table-label">查看当前结果表 · 8 条配置</span> <span aria-hidden="true">↓</span></summary>
         <div class="table-wrap" tabindex="0" role="region" aria-label="测试结果表，可水平滚动">
           <table><caption id="table-caption" class="sr-only">DINO-100M 当前结果</caption><thead><tr><th scope="col">方案 / 配置</th><th scope="col">Recall@10</th><th scope="col">QPS</th><th scope="col">读盘<br><small>KiB / 查询</small></th><th scope="col">平均<br><small>ms</small></th><th scope="col">P99<br><small>ms</small></th><th scope="col">RSS<br><small>GiB</small></th></tr></thead><tbody id="table-body"></tbody></table>
         </div>
