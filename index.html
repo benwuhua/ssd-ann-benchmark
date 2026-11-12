@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="DiskANN、GoVector、DGAI、LAANN 的索引原理和 ARM64 实测。比较 DINO-100M、DINO-1M 与 SIFT1M 的召回率、吞吐、尾延迟和实际读盘量。">
+<meta name="theme-color" content="#101429">
+<title>SSD 向量检索 · 测试报告</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:,">
+<script defer src="benchmark.js"></script>
+<script defer src="report.js"></script>
+</head>
+<body>
+<a class="skip" href="#results">跳到测试结果</a>
+<header class="top">
+  <div class="shell top-inner">
+    <a class="brand" href="#top"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span> SSD 向量检索</a>
+    <nav aria-label="报告目录"><a href="#results">实测结果</a><a href="#systems">方案原理</a><a href="#analysis">结果解读</a><a href="#method">测试口径</a></nav>
+    <a class="download" href="benchmark.csv" download>下载数据 <span aria-hidden="true">↓</span></a>
+  </div>
+</header>
+<main id="top">
+  <section class="hero" aria-labelledby="title">
+    <div class="shell hero-inner">
+      <div class="hero-copy">
+        <p class="eyebrow"><span></span> ARM64 实测 <b> / </b> 2026.11</p>
+        <h1 id="title">SSD 向量检索<br>测试报告</h1>
+        <p class="intro">DiskANN、GoVector、DGAI 与 LAANN。沿着一次查询看图遍历、缓存与 I/O 调度，再用一亿向量实测比较它们的取舍。</p>
+        <a class="hero-link" href="#results">查看测试结果 <span aria-hidden="true">↘</span></a>
+      </div>
+      <div class="hero-visual" role="img" aria-label="NVMe 固态硬盘的概念配图"></div>
+    </div>
+    <div class="shell metric-strip">
+      <div><strong>1,216 <small>QPS</small></strong><span>LAANN 自适应吞吐</span></div>
+      <div><strong>210.8 <small>KiB</small></strong><span>LAANN 固定 W2 零热页读盘 / 查询</span></div>
+      <div><strong>4.54 <small>ms</small></strong><span>LAANN 自适应 P99</span></div>
+    </div>
+    <p class="shell hero-foot">以上数值来自 DINO-100M。自适应配置使用 154.7 万个静态热页。</p>
+  </section>
+
+  <section id="results" class="shell section results">
+    <p class="overline">BENCHMARK</p>
+    <div class="section-head"><div><h2>在相近召回下比较</h2><p>切换数据集与指标，查看各方案的吞吐、读盘量和时延。</p></div></div>
+    <div class="panel explorer">
+      <div class="explorer-head">
+        <div class="dataset-options" role="group" aria-label="数据集">
+          <button type="button" data-set="100m" aria-pressed="true">DINO-100M</button>
+          <button type="button" data-set="sift" aria-pressed="false">SIFT1M</button>
+          <button type="button" data-set="1m" aria-pressed="false">DINO-1M</button>
+        </div>
+        <label class="check"><input id="all" type="checkbox"> 显示缓存与自适应配置</label>
+      </div>
+      <p class="dataset-meta" id="dataset-meta">1 亿向量 · 1,024 维 · uint8 · 1,000 条查询</p>
+      <div class="metric-options" role="group" aria-label="图表指标">
+        <button type="button" data-metric="qps" aria-pressed="true">吞吐 QPS</button>
+        <button type="button" data-metric="read" aria-pressed="false">实际读盘</button>
+        <button type="button" data-metric="p99" aria-pressed="false">P99 时延</button>
+        <button type="button" data-metric="mean" aria-pressed="false">平均时延</button>
+      </div>
+      <figure class="chart" aria-labelledby="chart-caption">
+        <figcaption id="chart-caption">吞吐量 · QPS 越高越好</figcaption>
+        <div id="chart-rows"></div>
+      </figure>
+      <div class="chart-note" id="chart-note"></div>
+      <details class="table-detail">
+        <summary>查看完整测试表 <span aria-hidden="true">↓</span></summary>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="测试结果表，可水平滚动">
+          <table><caption id="table-caption" class="sr-only">DINO-100M 完整结果</caption><thead><tr><th scope="col">方案 / 配置</th><th scope="col">Recall@10</th><th scope="col">QPS</th><th scope="col">读盘<br><small>KiB / 查询</small></th><th scope="col">平均<br><small>ms</small></th><th scope="col">P99<br><small>ms</small></th><th scope="col">RSS<br><small>GiB</small></th></tr></thead><tbody id="table-body"></tbody></table>
+        </div>
+      </details>
+      <noscript>开启 JavaScript 查看交互图表，或直接下载 <a href="benchmark.csv">完整测试数据</a>。</noscript>
+    </div>
+  </section>
+
+  <section id="systems" class="shell section">
+    <p class="overline">SYSTEM DESIGN</p>
+    <div class="section-head"><div><h2>一条查询如何走到 Top‑K</h2><p>四种方案都在内存里用 PQ 估距。差异出现在磁盘布局、扩展单位和读请求的时机。</p></div></div>
+    <div class="systems">
+      <article class="panel system diskann">
+        <h3><span></span> DiskANN</h3><p class="system-sub">按节点扩展 Vamana 图</p>
+        <ol class="flow"><li><span>DRAM</span>PQ 筛选候选</li><li><span>SSD</span>读向量与邻接表</li><li><span>CPU</span>扩展邻居并精排</li></ol>
+        <p>节点记录同时保存原始向量和邻接表。束搜索按候选节点发起读取，用读回的边推进搜索，并计算精确距离。</p>
+        <a href="https://papers.nips.cc/paper/2019/hash/09853c7fb1d3f8ee67a61b6bf4a7f8e6-Abstract.html">DiskANN 论文 ↗</a>
+      </article>
+      <article class="panel system govector">
+        <h3><span></span> GoVector</h3><p class="system-sub">利用布局与局部探索的缓存</p>
+        <ol class="flow"><li><span>布局</span>相似点靠近存放</li><li><span>入口</span>静态缓存覆盖热点</li><li><span>探索</span>动态缓存复用邻页</li></ol>
+        <p>重排提升相似节点的空间局部性。论文在入口阶段用静态缓存，在局部探索阶段用动态缓存。本次实测关闭静态节点缓存，每次读取一页。</p>
+        <a href="https://arxiv.org/abs/2508.15694">GoVector 论文 ↗</a>
+      </article>
+      <article class="panel system dgai">
+        <h3><span></span> DGAI</h3><p class="system-sub">拓扑遍历与原始向量分开读</p>
+        <ol class="flow"><li><span>DRAM</span>PQ 筛选候选</li><li><span>拓扑文件</span>异步扩展与页复用</li><li><span>向量文件</span>读取候选并精排</li></ol>
+        <p>拓扑页只保存图信息。查询可在等待 I/O 时主动扩展，并在单次查询内复用已读拓扑页。DINO‑100M 布局以固定图重放近邻选页和 METIS 分裂规则。</p>
+        <a href="https://github.com/iDC-NEU/DGAI">DGAI 源码 ↗</a>
+      </article>
+      <article class="panel system laann">
+        <h3><span></span> LAANN</h3><p class="system-sub">内存导航与页级搜索</p>
+        <ol class="flow"><li><span>DRAM</span>导航图生成入口</li><li><span>SSD</span>扩展整页及合并边</li><li><span>调度</span>收敛时扩大并发</li></ol>
+        <p>以 PageANN 页节点为基础，一次读回同页向量和合并邻接边。接近阶段优先处理内存候选，收敛阶段束宽先升后降，并在 I/O 等待期间安排候选计算。</p>
+        <a href="https://arxiv.org/html/2606.02784v1#S4">LAANN 论文 ↗</a>
+      </article>
+    </div>
+  </section>
+
+  <section id="analysis" class="analysis-band">
+    <div class="shell section">
+      <p class="overline">DINO-100M · ABLATION</p>
+      <div class="section-head"><div><h2>少读盘与少等待，各有来源</h2><p>固定 W2 约束磁盘并发。自适应配置从 W2 起步，收敛时可扩大宽度。</p></div></div>
+      <div class="insight-grid">
+        <article class="panel insight">
+          <h3>固定 W2，页级扩展降低读盘量</h3>
+          <div class="mini" role="img" aria-label="每查询读盘，DGAI 596.1 KiB，DiskANN 392.7 KiB，LAANN 210.8 KiB">
+            <div><span>DGAI</span><i style="--v:100%;--tone:var(--dgai)"></i><b>596.1</b></div>
+            <div><span>DiskANN</span><i style="--v:65.9%;--tone:var(--diskann)"></i><b>392.7</b></div>
+            <div><span>LAANN</span><i style="--v:35.4%;--tone:var(--laann)"></i><b>210.8</b></div>
+          </div>
+          <p class="micro">实际读盘量 · KiB / 查询</p>
+          <p>LAANN 零热页的吞吐与 DGAI 接近，读盘少 65%。DGAI 本次每查询为 79 个候选读取原始向量，约占 316 KiB。LAANN 可直接用已读页里的向量精排。</p>
+        </article>
+        <article class="panel insight">
+          <h3>自适应宽度缩短串行等待</h3>
+          <div class="mini" role="img" aria-label="每查询平均阻塞等待 I/O，固定 W2 为 1.54 毫秒，自适应为 0.47 毫秒">
+            <div><span>固定 W2</span><i style="--v:100%;--tone:var(--diskann)"></i><b>1.54</b></div>
+            <div><span>自适应</span><i style="--v:30.5%;--tone:var(--laann)"></i><b>0.47</b></div>
+          </div>
+          <p class="micro">每查询平均阻塞等待 I/O · ms</p>
+          <p>相同 154.7 万热页、约 85.7% 召回下，搜索轮次从 22.4 降至 5.7。每查询多读 18%，QPS 提升 26%，P99 下降 19%。</p>
+        </article>
+      </div>
+      <div class="study">
+        <h3>前瞻、导航与拓扑复用</h3>
+        <div class="study-grid">
+          <div><strong>LAANN 前瞻</strong><p>DINO‑100M 固定 W2、同缓存、同 L=55，开启和关闭前瞻分别为 986 和 980 QPS，读盘均约 169.8 KiB/查询。论文的 look-ahead 消融也计入收敛阶段的并发调整。</p></div>
+          <div><strong>LAANN 导航</strong><p>SIFT1M 零热页的关闭导航诊断中，读盘为 138.8 KiB/查询，开启导航后为 81.6。关闭导航为单轮结果。DINO‑100M 仍需独立消融才能量化导航贡献。</p></div>
+          <div><strong>DGAI 查询内复用</strong><p>DINO‑100M 的独立消融中，关闭主动扩展后再关闭拓扑页复用，读盘由 623.5 升至 732.6 KiB/查询，QPS 从 833 降至 669。召回约为 85.6%–85.7%。</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="method" class="shell section method">
+    <p class="overline">METHODOLOGY</p>
+    <div class="section-head"><div><h2>测试口径与参考资料</h2><p>本页数据来自 ARM64 实测。论文链接用于解释算法机制。</p></div></div>
+    <div class="method-grid">
+      <dl class="panel spec">
+        <div><dt>平台</dt><dd>单台 Linux 昆鹏 920 ARM64 主机、NVMe SSD、4 个查询线程。</dd></div>
+        <div><dt>查询</dt><dd>L2、Top‑10、相近 Recall@10。主对照固定 W=2，自适应行另列。各配置调节搜索候选列表长度 L。</dd></div>
+        <div><dt>采样</dt><dd>除标注的单轮复测外，取三轮中位数。QPS 和时延以查询循环计，初始化、预热和静态缓存载入在计时之外。</dd></div>
+        <div><dt>读盘</dt><dd>查询使用 O_DIRECT。按内核记账的 read_bytes 计算 KiB/查询，包含拓扑页和原始向量读取。</dd></div>
+        <div><dt>可比性</dt><dd>各方案使用自身磁盘布局与缓存策略。零热页 LAANN 仍加载导航图。GoVector 的动态缓存行采用单页窗口，DGAI 的精排读取计入总读盘量。DINO‑100M 的 DiskANN、DGAI 主对照 RSS 来自相同配置的独立采样。</dd></div>
+        <div><dt>构建</dt><dd>DINO‑100M LAANN 页索引约 127.16 GiB，构建用时 3 小时 12 分钟。导航图从 3,333 万页中抽取 100 万页代表向量。</dd></div>
+      </dl>
+      <aside class="panel sources" aria-label="参考资料">
+        <h3>公开资料</h3>
+        <ul>
+          <li><a href="https://github.com/microsoft/DiskANN/tree/cpp_main">DiskANN C++ 实现 ↗</a></li>
+          <li><a href="https://github.com/iDC-NEU/GoVector">GoVector 实现 ↗</a></li>
+          <li><a href="https://arxiv.org/abs/2510.25401">DGAI 论文 ↗</a></li>
+          <li><a href="https://github.com/Dingyi-Kang/PageANN/tree/58fe40feb58d0ca1a168816b36c4d4b22d3eb29c">LAANN 实现与版本 ↗</a></li>
+          <li><a href="https://github.com/harsha-simhadri/big-ann-benchmarks/blob/main/dataset_preparation/dino10b_dataset.md">BigANN DINO 数据集 ↗</a></li>
+          <li><a href="https://corpus-texmex.irisa.fr/">SIFT1M 数据集 ↗</a></li>
+        </ul>
+        <a class="download" href="benchmark.csv" download>下载汇总 CSV <span aria-hidden="true">↓</span></a>
+      </aside>
+    </div>
+  </section>
+</main>
+<footer><div class="shell footer"><span>SSD 向量检索测试报告</span><a href="#top">回到顶部 ↑</a></div></footer>
+</body>
+</html>
